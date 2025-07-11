@@ -1,0 +1,67 @@
+name: Setup Caches
+
+on:
+  repository_dispatch:
+    types: [build_firmware]
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: '源仓库 URL'
+        default: 'https://github.com/padavanonly/immortalwrt-mt798x-24.10'
+        type: choice
+        options:
+          - 'https://github.com/padavanonly/immortalwrt-mt798x-24.10'
+      repo_branch:
+        description: '源仓库分支'
+        default: 'openwrt-24.10-6.6'
+        type: choice
+        options:
+          - 'openwrt-24.10-6.6'
+      custom_last_build_sha:
+        description: '自定义本仓库上次构建的 SHA'
+        type: string
+        required: false
+        default: ''
+      custom_last_checked_sha:
+        description: '自定义源仓库上次检查的 SHA'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  REPO_URL: ${{ github.event.inputs.repo_url || 'https://github.com/padavanonly/immortalwrt-mt798x-24.10' }}
+  REPO_BRANCH: ${{ github.event.inputs.repo_branch || 'openwrt-24.10-6.6' }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+  CUSTOM_LAST_BUILD_SHA: ${{ github.event.inputs.custom_last_build_sha || '' }}
+  CUSTOM_LAST_CHECKED_SHA: ${{ github.event.inputs.custom_last_checked_sha || '' }}
+
+jobs:
+  setup-cache:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 检出本仓库代码
+        uses: actions/checkout@v4
+
+      - name: 生成缓存文件
+        run: |
+          echo "${{ env.CUSTOM_LAST_BUILD_SHA }}" > last_build_sha.txt
+          echo "${{ env.CUSTOM_LAST_CHECKED_SHA }}" > last_checked_sha.txt
+
+      - name: 设置 REPO_PATH
+        run: echo "REPO_PATH=$(echo $REPO_URL | sed -E 's#https://github.com/##;s#/$##')" >> $GITHUB_ENV
+
+      - name: 设置 last_checked_sha 缓存
+        uses: actions/cache@v4
+        with:
+          path: last_checked_sha.txt
+          key: ${{ env.REPO_PATH }}-${{ env.REPO_BRANCH }}-last-checked-sha
+
+      - name: 设置 last_build_sha 缓存
+        uses: actions/cache@v4
+        with:
+          path: last_build_sha.txt
+          key: ${{ env.REPO_PATH }}-${{ env.REPO_BRANCH }}-last-build-sha

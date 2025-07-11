@@ -1,0 +1,426 @@
+name: IMwrt-24.10-5.x
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      device_model:
+        description: '选择目标设备型号'
+        type: choice
+        required: true
+        options:
+          - cmcc_rax3000m-emmc
+          - cmcc_rax3000m-emmc-usboffload
+      enable_5g_25db:
+        description: '启用 5G 25dB 修改'
+        type: boolean
+        required: true
+        default: true
+      upload_bin_dir:
+        description: '上传 bin 目录'
+        type: boolean
+        required: true
+        default: true
+      ssh:
+        description: 'SSH connection to Actions'
+        type: boolean
+        required: true
+        default: false
+
+  schedule:
+    - cron: '0 7 * * 5'  # 每周五 UTC 时间 07:00 运行（北京时间 15:00）
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  REPO_URL: https://github.com/padavanonly/immortalwrt-mt798x-24.10
+  REPO_BRANCH: 2410
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: 24.10-5.x.config
+  DIY_P1_SH: scripts/24.10-5.x/diy-part1.sh
+  DIY_P2_SH: scripts/24.10-5.x/diy-part2.sh
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+  ENABLE_5G_25DB: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_5g_25db || secrets.ENABLE_5G_25DB || 'true' }}
+
+jobs:
+  check-source-updates:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+    steps:
+      - name: 检出本仓库代码
+        uses: actions/checkout@v4
+
+      - name: 安装 GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      - name: 检查源仓库更新
+        id: check
+        run: |
+          LATEST_SHA=$(curl -s -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/padavanonly/immortalwrt-mt798x-24.10/commits/$REPO_BRANCH" | jq -r '.sha')
+          LAST_CHECKED_FILE="last_checked_sha.txt"
+          if [ -f "$LAST_CHECKED_FILE" ]; then
+            LAST_CHECKED_SHA=$(cat "$LAST_CHECKED_FILE")
+          else
+            LAST_CHECKED_SHA=""
+          fi
+          if [ "$LATEST_SHA" != "$LAST_CHECKED_SHA" ]; then
+            echo "检测到源仓库有新更新。最新 SHA: $LATEST_SHA，上次检查: $LAST_CHECKED_SHA"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "$LATEST_SHA" > "$LAST_CHECKED_FILE"
+          else
+            echo "源仓库无更新，跳过编译。"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 上传上次检查的 SHA
+        if: steps.check.outputs.should_build == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: last-checked-sha
+          path: last_checked_sha.txt
+
+  build:
+    needs: check-source-updates
+    if: github.event_name == 'workflow_dispatch' || (needs.check-source-updates.outputs.should_build == 'true' && github.event_name != 'workflow_dispatch')
+    runs-on: ubuntu-22.04
+    name: 编译 ${{ matrix.device_model }}
+    strategy:
+      matrix:
+        device_model: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.device_model && fromJSON(format('["{0}"]', github.event.inputs.device_model)) || fromJSON('["cmcc_rax3000m-emmc", "cmcc_rax3000m-emmc-usboffload"]') }}
+    steps:
+      - name: 调试信息
+        run: |
+          echo "触发方式: ${{ github.event_name }}"
+          echo "设备型号: ${{ matrix.device_model }}"
+          echo "5G 25dB: ${{ env.ENABLE_5G_25DB }}"
+          echo "上传 bin 目录: ${{ github.event.inputs.upload_bin_dir }}"
+
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 检查磁盘空间
+        # 修复：改进磁盘空间检查逻辑，确保准确比较数值，并降低要求到 10GB
+        run: |
+          MIN_SPACE=10
+          AVAILABLE=$(df -BG . | tail -1 | awk '{print $4}' | grep -o '[0-9]\+')
+          if [ "$AVAILABLE" -lt "$MIN_SPACE" ]; then
+            echo "错误：磁盘空间不足，可用空间 ${AVAILABLE}G，需至少 ${MIN_SPACE}G"
+            exit 1
+          fi
+          echo "可用磁盘空间：${AVAILABLE}G"
+
+      - name: 初始化环境
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo -E apt-get -qq update
+          sudo -E apt-get -qq install -y ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential \
+            bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib \
+            git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev \
+            libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev \
+            libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 \
+            python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo \
+            uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev zip
+          sudo -E apt-get -qq autoremove --purge
+          sudo -E apt-get -qq clean
+          sudo timedatectl set-timezone "$TZ"
+          sudo mkdir -p /workdir
+          sudo chown $USER:$GROUPS /workdir
+
+      - name: 缓存编译中间文件
+        uses: actions/cache@v4
+        with:
+          path: |
+            /workdir/openwrt/dl
+            /workdir/openwrt/build_dir
+            /workdir/openwrt/staging_dir
+          key: ${{ runner.os }}-build-${{ matrix.device_model }}-${{ hashFiles('openwrt/.config', 'feeds.conf.default') }}
+          restore-keys: ${{ runner.os }}-build-${{ matrix.device_model }}-
+
+      - name: 缓存 ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{ runner.os }}-ccache-${{ matrix.device_model }}-${{ hashFiles('openwrt/.config', 'feeds.conf.default') }}
+          restore-keys: ${{ runner.os }}-ccache-${{ matrix.device_model }}-
+
+      - name: 配置 ccache
+        run: |
+          echo "export PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
+          echo "export CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
+          ccache -M 5G
+
+      - name: 缓存 Feeds
+        uses: actions/cache@v4
+        with:
+          path: /workdir/openwrt/feeds
+          key: ${{ runner.os }}-feeds-${{ hashFiles('feeds.conf.default') }}
+          restore-keys: ${{ runner.os }}-feeds-
+
+      - name: 安装 GitHub CLI
+        run: |
+          sudo apt-get install -y gh
+
+      - name: 克隆源码
+        working-directory: /workdir
+        # 修复：清理已有 openwrt 目录以避免克隆失败
+        run: |
+          df -hT $PWD
+          if [ -d "/workdir/openwrt" ]; then
+            echo "检测到 openwrt 目录已存在，正在清理..."
+            rm -rf /workdir/openwrt
+          fi
+          git clone $REPO_URL -b $REPO_BRANCH openwrt
+          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+      - name: 检查 Feeds 配置变更
+        id: check_feeds
+        run: |
+          if [ -f openwrt/feeds.conf.default ] && cmp -s openwrt/feeds.conf.default $FEEDS_CONF; then
+            echo "feeds_unchanged=true" >> $GITHUB_OUTPUT
+          else
+            echo "feeds_unchanged=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 加载 Feeds
+        timeout-minutes: 10
+        run: |
+          [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+          chmod +x $DIY_P1_SH
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_P1_SH
+
+      - name: 更新 Feeds
+        if: steps.check_feeds.outputs.feeds_unchanged == 'false'
+        timeout-minutes: 20
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a || { echo "更新 Feeds 失败"; exit 1; }
+          ./scripts/feeds install -a || { echo "安装 Feeds 失败"; exit 1; }
+
+      - name: 加载配置
+        run: |
+          [ -e files ] && mv files openwrt/files
+          [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+          echo "CONFIG_TARGET_mediatek_mt7981_DEVICE_${{ matrix.device_model }}=y" >> openwrt/.config
+          chmod +x $DIY_P2_SH
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_P2_SH
+          make defconfig
+
+      - name: 下载软件包
+        id: package
+        timeout-minutes: 30
+        run: |
+          cd openwrt
+          make download -j8 || { echo "下载软件包失败"; exit 1; }
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: 修改 5G 25dB
+        if: github.event_name != 'workflow_dispatch' || env.ENABLE_5G_25DB == 'true'
+        working-directory: ./openwrt
+        run: |
+          EEPROM_FILE=package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/MT7981_iPAiLNA_EEPROM.bin
+          EXPECTED_CONTENT=$(printf '\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B')
+          if [ ! -f "$EEPROM_FILE" ]; then
+            echo "EEPROM 文件不存在，创建新文件"
+            mkdir -p "$(dirname "$EEPROM_FILE")"
+            touch "$EEPROM_FILE"
+          fi
+          CURRENT_CONTENT=$(dd if="$EEPROM_FILE" bs=1 skip=$((0x445)) count=20 2>/dev/null || echo "")
+          if [ "$CURRENT_CONTENT" != "$EXPECTED_CONTENT" ]; then
+            printf '\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B' | dd of="$EEPROM_FILE" bs=1 seek=$((0x445)) conv=notrunc
+            echo "EEPROM 文件已更新"
+          else
+            echo "EEPROM 文件无需修改"
+          fi
+
+      - name: 检查源码变更
+        id: check_source
+        run: |
+          cd openwrt
+          if git diff --name-only HEAD^ HEAD | grep -E '^(package/|target/)'; then
+            echo "source_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "source_changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 编译固件
+        id: compile
+        timeout-minutes: 120
+        run: |
+          set -e
+          cd openwrt
+          if [ "${{ steps.check_source.outputs.source_changed }}" == "false" ]; then
+            echo "无源码变更，执行增量编译"
+            make -j$(nproc) CCACHE=1 package/index
+            make -j1 target/install
+          else
+            echo "检测到源码变更，执行完整编译"
+            make -j$(nproc) CCACHE=1 || { make -j1 V=s CCACHE=1 && exit 1; }
+          fi
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "DEVICE_NAME=_${{ matrix.device_model }}" >> $GITHUB_ENV
+          echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+
+      - name: 上传编译日志
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-log-${{ matrix.device_model }}
+          path: |
+            openwrt/build_dir/**/*.log
+            openwrt/logs/*.log
+            openwrt/*.log
+
+      - name: SSH链接管理
+        uses: P3TERX/ssh2actions@v1.0.0
+        if: (github.event.inputs.ssh == 'true')
+
+      - name: 提取固件版本号
+        id: version
+        if: steps.compile.outputs.status == 'success'
+        run: |
+          cd openwrt
+          VERSION_FILE=$(find bin/targets/*/*/ -type f -name "openwrt_version" 2>/dev/null | head -n 1)
+          if [ -n "$VERSION_FILE" ] && [ -f "$VERSION_FILE" ]; then
+            VERSION=$(cat "$VERSION_FILE")
+            echo "从 $VERSION_FILE 提取版本: $VERSION"
+          else
+            VERSION_FILE=$(find staging_dir/target-*/root-*/etc/ -type f -name "openwrt_version" 2>/dev/null | head -n 1)
+            if [ -n "$VERSION_FILE" ] && [ -f "$VERSION_FILE" ]; then
+              VERSION=$(cat "$VERSION_FILE")
+              echo "从 $VERSION_FILE 提取版本: $VERSION"
+            else
+              VERSION="24.10-SNAPSHOT-r$(git rev-list --count origin/$REPO_BRANCH)-$(git rev-parse --short origin/$REPO_BRANCH)"
+              echo "未找到 openwrt_version，使用源仓库版本: $VERSION"
+            fi
+          fi
+          SAFE_VERSION=$(echo "$VERSION" | grep -o 'r[0-9]\+' || echo "r0000")
+          if [ -z "$SAFE_VERSION" ]; then
+            SAFE_VERSION="r0000"
+            echo "警告：无法提取有效版本号，使用默认值: $SAFE_VERSION"
+          fi
+          echo "提取的版本号: $SAFE_VERSION"
+          echo "FIRMWARE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: 检查磁盘
+        if: always()
+        run: |
+          df -hT
+
+      - name: 上传 bin
+        uses: actions/upload-artifact@v4
+        if: steps.compile.outputs.status == 'success' && github.event_name == 'workflow_dispatch' && github.event.inputs.upload_bin_dir == 'true'
+        with:
+          name: OpenWrt_bin${{ env.DEVICE_NAME }}${{ env.FILE_DATE }}
+          path: openwrt/bin
+
+      - name: 整理固件并固定文件名
+        id: organize
+        if: env.UPLOAD_FIRMWARE == 'true' && steps.compile.outputs.status == 'success'
+        run: |
+          set -e
+          cd openwrt/bin/targets/*/*
+          rm -rf packages
+          if [ "$ENABLE_5G_25DB" = "true" ]; then
+            DB25="on"
+          else
+            DB25="off"
+          fi
+          DEVICE_MODEL="${{ matrix.device_model }}"
+          for file in *sysupgrade.bin *factory.bin; do
+            if [ -f "$file" ]; then
+              TYPE=$(echo "$file" | grep -o "sysupgrade\|factory")
+              NEW_NAME="${DEVICE_MODEL}_25dB-${DB25}_${FIRMWARE_VERSION}${FILE_DATE}_${TYPE}.bin"
+              mv "$file" "$NEW_NAME"
+            fi
+          done
+          echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: 生成标签和发布描述
+        id: tag
+        if: env.UPLOAD_RELEASE == 'true' && steps.compile.outputs.status == 'success'
+        run: |
+          set -e
+          # 验证必要变量
+          if [ -z "${{ matrix.device_model }}" ] || [ -z "${{ env.FIRMWARE_VERSION }}" ]; then
+            echo "Missing required variables"
+            exit 1
+          fi
+
+          # 生成标签
+          TAG="ImmortalWrt-24.10-${{ matrix.device_model }}-${{ env.FIRMWARE_VERSION }}"
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_OUTPUT
+
+          # 生成发布说明
+          {
+            echo "固件版本: ImmortalWrt $FIRMWARE_VERSION"
+            echo "设备型号: ${{ matrix.device_model }}"
+            echo "编译时间: $(date +'%Y-%m-%d %H:%M %Z')"
+            echo "高功率模式: $([ "$ENABLE_5G_25DB" = 'true' ] && echo '已启用' || echo '未启用')"
+            echo -e "\n### 更新内容"
+            git log --pretty=format:"- %s" -n 5
+            echo -e "\n### 验证固件"
+            echo -e "\n- 未验证"
+            验证固件
+未验证
+          } > release.txt
+
+          echo "status=success" >> $GITHUB_OUTPUT
+
+
+      - name: 验证Release创建
+        run: |
+          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ steps.tag.outputs.RELEASE_TAG }} | jq .
+
+      - name: 调试输出
+        run: |
+          echo "FIRMWARE路径: ${{ env.FIRMWARE }}"
+          echo "TAG状态: ${{ steps.tag.outputs.status }}"
+          ls -la ${{ env.FIRMWARE }}/
+
+      - name: 发布固件
+        uses: softprops/action-gh-release@v2.1.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.tag.outputs.RELEASE_TAG || github.ref_name }}
+          body_path: release.txt
+          files: ${{ env.FIRMWARE }}/*sysupgrade.bin
+          prerelease: false
+          make_latest: true
+
+      - name: 清理旧 Releases
+        if: steps.tag.outputs.status == 'success'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASES=$(gh release list --repo ${{ github.repository }} --limit 100 --json name --jq '.[] | select(.name | test("ImmortalWrt-24.10-${{ matrix.device_model }}")) | .name')
+          if [ -n "$RELEASES" ]; then
+            for RELEASE in $RELEASES; do
+              gh release delete "$RELEASE" --yes || { echo "删除 Release $RELEASE 失败"; exit 1; }
+            done
+          else
+            echo "无需清理旧 Releases"
+          fi
+
+      - name: 清理旧工作流运行
+        if: steps.tag.outputs.status == 'success'
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          retain_days: 1
+          keep_minimum_runs: 2
