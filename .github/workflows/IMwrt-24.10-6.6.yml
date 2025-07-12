@@ -394,6 +394,22 @@ jobs:
           name: OpenWrt_config
           path: openwrt/config
 
+      - name: Get Version Info
+        id: versions
+        working-directory: ./openwrt
+        run: |
+          # 获取固件版本
+          FW_VERSION=$(grep 'REVISION:=' include/version.mk | cut -d'=' -f2 | xargs)
+          echo "FW_VERSION=${FW_VERSION}" >> $GITHUB_OUTPUT
+
+          # 获取内核版本 (从 .config 文件)
+          KERNEL_CONFIG_LINE=$(grep 'CONFIG_LINUX_.*=y' .config | grep -E 'CONFIG_LINUX_[0-9]+_[0-9]+=y' | head -n1)
+          KERNEL_VERSION=$(echo $KERNEL_CONFIG_LINE | sed -e 's/CONFIG_LINUX_//' -e 's/=y//' -e 's/_/./')
+          echo "KERNEL_VERSION=${KERNEL_VERSION}" >> $GITHUB_OUTPUT
+
+          echo "固件版本: ${FW_VERSION}"
+          echo "内核版本: ${KERNEL_VERSION}"
+
       - name: 编译固件
         id: compile
         timeout-minutes: 180
