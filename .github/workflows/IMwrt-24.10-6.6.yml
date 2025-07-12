@@ -114,7 +114,9 @@ jobs:
           echo "跳转URL：" $LATEST_URL
           response=$(curl -s -f -H "Accept: application/vnd.github.v3+json" "$LATEST_URL")
           LATEST_SHA=$(echo "$response" | jq -r '.sha' || echo "")
-          LATEST_COMMIT_MESSAGE=$(echo "$response" | jq -r '.commit.message' || echo "")
+          # LATEST_COMMIT_MESSAGE=$(echo "$response" | jq -r '.commit.message' || echo "")
+          LATEST_COMMIT_MESSAGE=$(echo "$response" | jq -r '.commit.message' | tr -d '\n' || echo "")
+          LATEST_COMMIT_MESSAGE=$(echo "$LATEST_COMMIT_MESSAGE" | cut -c1-100) # 限制长度
           if [ -z "$LATEST_SHA" ] || [ "$LATEST_SHA" = "null" ]; then
             echo "无法获取最新 SHA，跳过编译"
             echo "should_build=false" >> $GITHUB_OUTPUT
