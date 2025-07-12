@@ -3,7 +3,7 @@ name: IMwrt-24.10-6.6
 on:
   repository_dispatch:
     types: [build_firmware]
-  # push:
+  push:
   #   branches: [ main ]
   workflow_dispatch:
     inputs:
@@ -29,10 +29,10 @@ on:
         default: true
       repo_url:
         description: '源仓库 URL'
-        default: 'https://github.com/padavanonly/immortalwrt-mt798x-24.10'
+        default: 'https://github.com/padavanonly/immortalwrt-mt798x-6.6'
         type: choice
         options:
-          - 'https://github.com/padavanonly/immortalwrt-mt798x-24.10'
+          - 'https://github.com/padavanonly/immortalwrt-mt798x-6.6'
       repo_branch:
         description: '源仓库分支'
         default: 'openwrt-24.10-6.6'
@@ -64,7 +64,7 @@ permissions:
   actions: write
 
 env:
-  REPO_URL: ${{ github.event.inputs.repo_url || 'https://github.com/padavanonly/immortalwrt-mt798x-24.10' }}
+  REPO_URL: ${{ github.event.inputs.repo_url || 'https://github.com/padavanonly/immortalwrt-mt798x-6.6' }}
   REPO_BRANCH: ${{ github.event.inputs.repo_branch || 'openwrt-24.10-6.6' }}
   FEEDS_CONF: feeds.conf.default
   CONFIG_FILE: ${{ github.event.inputs.config_file || '24.10-6.6.config' }}
