@@ -252,6 +252,21 @@ jobs:
           echo "export CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
           ccache -M 5G
 
+      - name: 清理磁盘空间(Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # when set to "true" but frees about 6 GB
+          tool-cache: true
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: false
+          dotnet: false
+          haskell: false
+          large-packages: false
+          swap-storage: false
+
       - name: 安装 GitHub CLI
         run: |
           sudo apt-get install -y gh
@@ -259,6 +274,7 @@ jobs:
       - name: 克隆源码
         working-directory: /workdir
         run: |
+          df -hT $PWD
           if [ -d "/workdir/openwrt" ]; then
             echo "检测到 openwrt 目录已存在，正在清理..."
             rm -rf /workdir/openwrt
