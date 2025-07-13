@@ -54,7 +54,7 @@ on:
         description: 'SSH connection to Actions'
         type: boolean
         required: true
-        default: false
+        default: true
 
   schedule:
     - cron: '0 16 * * *' # 北京时间每天00:00
@@ -408,7 +408,7 @@ jobs:
         #if: (github.event.inputs.ssh == 'true')
         with:
           name: OpenWrt_config
-          path: openwrt/config
+          path: openwrt/.config
 
       - name: Get Version Info
         id: versions
