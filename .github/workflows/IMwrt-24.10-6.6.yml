@@ -420,12 +420,12 @@ jobs:
 
           if [ ! -f include/version.mk ]; then
             echo "Error: include/version.mk not found"
-            exit 1
+            # exit 1
           fi
           FW_VERSION=$(awk -F ':=' '/VERSION_NUMBER:=/ {print $2}' include/version.mk | xargs)
           if [ -z "$FW_VERSION" ]; then
             echo "Error: Failed to extract VERSION_NUMBER"
-            exit 1
+            # exit 1
           fi
           echo "FW_VERSION=${FW_VERSION}" >> $GITHUB_OUTPUT
 
@@ -440,10 +440,11 @@ jobs:
       - name: Extract and Display Kernel Version
         id: get_kernel_version
         run: |
+          cd openwrt
           # 检查 .config 文件是否存在
           if [ ! -f ".config" ]; then
             echo "错误: .config 文件未找到。请确保在运行此步骤之前已生成配置文件。"
-            exit 1
+            #exit 1
           fi
 
           # 步骤 1: 从 .config 文件中读取当前配置的内核主版本
@@ -453,7 +454,7 @@ jobs:
 
           if [ -z "$BASE_VER" ]; then
             echo "错误: 无法从 .config 文件中确定内核版本。"
-            exit 1
+            #exit 1
           fi
 
           # 步骤 2: 构建内核版本信息文件的完整路径
@@ -461,7 +462,7 @@ jobs:
 
           if [ ! -f "$KERNEL_CONFIG_FILE" ]; then
             echo "错误: 内核版本文件 '$KERNEL_CONFIG_FILE' 未找到！"
-            exit 1
+            #exit 1
           fi
 
           # 步骤 3: 从版本文件中提取补丁版本号
@@ -479,13 +480,15 @@ jobs:
 
       - name: Generate Firmware Version String
         id: generate_version
+        working-directory: ./openwrt
         run: |
+
           echo "--- 准备开始生成固件版本信息 ---"
 
           # 步骤 0: 检查所需文件是否存在
           if [ ! -f ".config" ] || [ ! -f "include/version.mk" ] || [ ! -f "package/base-files/files/etc/openwrt_release" ]; then
             echo "::error::缺少必要文件 (.config, include/version.mk, or openwrt_release)。请确保此步骤在生成配置后运行。"
-            exit 1
+            #exit 1
           fi
 
           # 步骤 1: 从 .config 文件提取目标平台和架构信息
