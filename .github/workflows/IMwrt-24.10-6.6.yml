@@ -359,6 +359,8 @@ jobs:
           $GITHUB_WORKSPACE/$DIY_P2_SH
           make defconfig
           cat .config
+          cp .config upload.config
+          ls -la
 
       - name: 下载软件包
         id: package
@@ -402,14 +404,14 @@ jobs:
 
       - name: SSH链接管理
         uses: P3TERX/ssh2actions@v1.0.0
-        # if: (github.event.inputs.ssh == 'true')
+        if: (github.event.inputs.ssh == 'true')
 
       - name: 上传 .config
         uses: actions/upload-artifact@v4
         #if: (github.event.inputs.ssh == 'true')
         with:
           name: OpenWrt_config
-          path: openwrt/.config
+          path: openwrt/*.config
 
       - name: Get Version Info
         id: versions
