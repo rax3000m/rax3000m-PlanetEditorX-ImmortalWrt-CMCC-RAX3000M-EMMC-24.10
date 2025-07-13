@@ -405,7 +405,7 @@ jobs:
 
       - name: 上传 .config
         uses: actions/upload-artifact@v4
-        if: (github.event.inputs.ssh == 'true')
+        #if: (github.event.inputs.ssh == 'true')
         with:
           name: OpenWrt_config
           path: openwrt/config
@@ -436,6 +436,119 @@ jobs:
 
           echo "固件版本: ${FW_VERSION}"
           echo "内核版本: ${KERNEL_VERSION}"
+
+      - name: Extract and Display Kernel Version
+        id: get_kernel_version
+        run: |
+          # 检查 .config 文件是否存在
+          if [ ! -f ".config" ]; then
+            echo "错误: .config 文件未找到。请确保在运行此步骤之前已生成配置文件。"
+            exit 1
+          fi
+
+          # 步骤 1: 从 .config 文件中读取当前配置的内核主版本
+          # 我们查找 CONFIG_TARGET_KERNEL_PARTSIZE 或类似的变量来确定版本
+          # 并用 cut 和 tr 命令提取出纯净的版本号，例如 "6.6"
+          BASE_VER=$(grep 'CONFIG_TARGET_KERNEL_PARTSIZE' .config | cut -d'=' -f2 | tr -d '"')
+
+          if [ -z "$BASE_VER" ]; then
+            echo "错误: 无法从 .config 文件中确定内核版本。"
+            exit 1
+          fi
+
+          # 步骤 2: 构建内核版本信息文件的完整路径
+          KERNEL_CONFIG_FILE="include/kernel-${BASE_VER}"
+
+          if [ ! -f "$KERNEL_CONFIG_FILE" ]; then
+            echo "错误: 内核版本文件 '$KERNEL_CONFIG_FILE' 未找到！"
+            exit 1
+          fi
+
+          # 步骤 3: 从版本文件中提取补丁版本号
+          PATCH_VER=$(grep "LINUX_VERSION-${BASE_VER}" "$KERNEL_CONFIG_FILE" | cut -d'=' -f2 | tr -d ' ')
+
+          # 步骤 4: 拼接成完整版本号
+          FULL_KERNEL_VERSION="${BASE_VER}${PATCH_VER}"
+
+          echo "已选定内核版本 (From .config): ${BASE_VER}"
+          echo "内核补丁版本 (Patch): ${PATCH_VER}"
+          echo "完整内核版本 (Full): ${FULL_KERNEL_VERSION}"
+
+          # 设置为输出
+          echo "kernel_version=${FULL_KERNEL_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Generate Firmware Version String
+        id: generate_version
+        run: |
+          echo "--- 准备开始生成固件版本信息 ---"
+
+          # 步骤 0: 检查所需文件是否存在
+          if [ ! -f ".config" ] || [ ! -f "include/version.mk" ] || [ ! -f "package/base-files/files/etc/openwrt_release" ]; then
+            echo "::error::缺少必要文件 (.config, include/version.mk, or openwrt_release)。请确保此步骤在生成配置后运行。"
+            exit 1
+          fi
+
+          # 步骤 1: 从 .config 文件提取目标平台和架构信息
+          TARGET_BOARD=$(grep 'CONFIG_TARGET_BOARD=' .config | cut -d'"' -f2)
+          TARGET_SUBTARGET=$(grep 'CONFIG_TARGET_SUBTARGET=' .config | cut -d'"' -f2)
+          TARGET_ARCH=$(grep 'CONFIG_TARGET_ARCH=' .config | cut -d'"' -f2)
+
+          # 组合成 %S (Target/Subtarget)
+          if [ -n "$TARGET_SUBTARGET" ]; then
+            DISTRIB_TARGET="${TARGET_BOARD}/${TARGET_SUBTARGET}"
+          else
+            DISTRIB_TARGET="${TARGET_BOARD}"
+          fi
+          echo "DISTRIB_TARGET (%S) = ${DISTRIB_TARGET}"
+          echo "DISTRIB_ARCH (%A) = ${TARGET_ARCH}"
+
+          # 步骤 2: 从 include/version.mk 提取静态版本信息
+          DISTRIB_ID=$(grep "^DISTRIB_ID" include/version.mk | cut -d"'" -f2)
+          DISTRIB_RELEASE=$(grep "^DISTRIB_RELEASE" include/version.mk | cut -d"'" -f2)
+          DISTRIB_CODENAME=$(grep "^DISTRIB_CODENAME" include/version.mk | cut -d"'" -f2)
+          echo "DISTRIB_ID (%D) = ${DISTRIB_ID}"
+          echo "DISTRIB_RELEASE (%V) = ${DISTRIB_RELEASE}"
+          echo "DISTRIB_CODENAME (%C) = ${DISTRIB_CODENAME}"
+
+          # 步骤 3: 使用 Git 计算动态的 DISTRIB_REVISION (%R)
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          SHORT_HASH=$(git log -n 1 --pretty=%h)
+          DISTRIB_REVISION="r${COMMIT_COUNT}-${SHORT_HASH}"
+          echo "DISTRIB_REVISION (%R) = ${DISTRIB_REVISION}"
+
+          # 步骤 4: 检查源码树状态以确定 Taints (%t)
+          # 在 CI 环境中，这个通常是空的，除非有未提交的更改
+          DISTRIB_TAINTS=$(git status --porcelain -uno)
+          echo "DISTRIB_TAINTS (%t) = ${DISTRIB_TAINTS}"
+
+          # 步骤 5: 读取模板并执行替换
+          echo "--- 正在替换模板 ---"
+          TEMPLATE_FILE="package/base-files/files/etc/openwrt_release"
+
+          # 使用 sed 进行链式替换，生成最终的版本信息
+          FINAL_RELEASE_INFO=$(cat "$TEMPLATE_FILE" | \
+            sed -e "s|%D|${DISTRIB_ID}|g" \
+                -e "s|%V|${DISTRIB_RELEASE}|g" \
+                -e "s|%R|${DISTRIB_REVISION}|g" \
+                -e "s|%S|${DISTRIB_TARGET}|g" \
+                -e "s|%A|${TARGET_ARCH}|g" \
+                -e "s|%C|${DISTRIB_CODENAME}|g" \
+                -e "s|%t|${DISTRIB_TAINTS}|g" \
+          )
+
+          echo "--- 最终生成的 openwrt_release 内容 ---"
+          echo "${FINAL_RELEASE_INFO}"
+          echo "---------------------------------------"
+
+          # 从生成的版本信息中提取第一行作为简短的固件版本字符串，并设为输出
+          # 例如：DISTRIB_ID='ImmortalWrt' -> ImmortalWrt
+          # 和 DISTRIB_RELEASE='24.10-SNAPSHOT' -> 24.10-SNAPSHOT
+          # 加上 DISTRIB_REVISION
+          FIRMWARE_VERSION_STRING="${DISTRIB_RELEASE} ${DISTRIB_REVISION}"
+          echo "计算出的简短固件版本: ${FIRMWARE_VERSION_STRING}"
+
+          # 将计算出的版本字符串设置为本步骤的输出，方便后续步骤（如文件命名、Release创建）使用
+          echo "firmware_version=${FIRMWARE_VERSION_STRING}" >> $GITHUB_OUTPUT
 
       - name: 编译固件
         id: compile
