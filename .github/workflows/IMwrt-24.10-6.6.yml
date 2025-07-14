@@ -355,11 +355,17 @@ jobs:
           [ -e config/$CONFIG_FILE ] && mv config/$CONFIG_FILE openwrt/.config
           echo "CONFIG_TARGET_mediatek_filogic_DEVICE_${{ matrix.device_model }}=y" >> openwrt/.config
           chmod +x $DIY_P2_SH
+          pwd
+          ls -la
           cd openwrt
           $GITHUB_WORKSPACE/$DIY_P2_SH
           make defconfig
-          cat .config
+          # cat .config
           cp .config upload.config
+          # cat /etc/docker/daemon.json
+          ls -la
+          cd files
+          pwd
           ls -la
 
       - name: 下载软件包

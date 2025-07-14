@@ -26,6 +26,8 @@ echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
 # 微信推送
 echo "CONFIG_PACKAGE_luci-app-wechatpush=y" >> .config
 echo "CONFIG_PACKAGE_luci-i18n-wechatpush-zh-cn=y" >> .config
+#应用过滤(OAF)
+echo "CONFIG_PACKAGE_luci-app-oaf=y" >>.config 
 
 # 删除 package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/e2p
 rm -f package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/e2p

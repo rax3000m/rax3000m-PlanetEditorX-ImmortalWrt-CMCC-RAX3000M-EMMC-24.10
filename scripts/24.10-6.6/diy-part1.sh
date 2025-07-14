@@ -10,3 +10,4 @@
 # 描述: OpenWrt DIY 脚本第一部分 (更新 feeds 之前)
 
 
+git clone https://github.com/destan19/OpenAppFilter package/OpenAppFilter
