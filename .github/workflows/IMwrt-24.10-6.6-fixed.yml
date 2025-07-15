@@ -489,6 +489,22 @@ jobs:
           # 设置为输出
           echo "kernel_version=${FULL_KERNEL_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Modify nfs-kernel-server Makefile
+        run: |
+          cd openwrt
+          if [ -f "feeds/packages/net/nfs-kernel-server/Makefile" ]; then
+            if ! grep -q "-Wno-error=format-nonliteral" feeds/packages/net/nfs-kernel-server/Makefile; then
+              sed -i '/TARGET_CFLAGS +=.*\\$/a\\t\t -Wno-error=format-nonliteral \\' feeds/packages/net/nfs-kernel-server/Makefile
+            else
+              echo "Flag -Wno-error=format-nonliteral already exists, skipping modification."
+            fi
+            echo "Modify nfs-kernel-server Makefile:"
+            cat feeds/packages/net/nfs-kernel-server/Makefile
+          else
+            echo "Error: Makefile not found at feeds/packages/net/nfs-kernel-server/Makefile"
+            exit 1
+          fi
+
       - name: 编译固件
         id: compile
         timeout-minutes: 180
