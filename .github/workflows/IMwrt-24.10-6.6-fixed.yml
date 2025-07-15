@@ -68,7 +68,7 @@ permissions:
 env:
   REPO_URL: ${{ github.event.inputs.repo_url || 'https://github.com/rax3000m/padavanonly-immortalwrt-mt798x-6.6-Fixed' }}
   REPO_BRANCH: ${{ github.event.inputs.repo_branch || 'openwrt-24.10-6.6-Fixed' }}
-  FEEDS_CONF: feeds.conf.default
+  FEEDS_CONF: config/feeds.conf.default
   CONFIG_FILE: ${{ github.event.inputs.config_file || '24.10-6.6.config' }}
   DIY_P1_SH: scripts/24.10-6.6/diy-part1.sh
   DIY_P2_SH: scripts/24.10-6.6/diy-part2.sh

@@ -1,0 +1,4 @@
+src-git-full packages https://github.com/rax3000m/immortalwrt-packages.git;master
+src-git-full luci https://github.com/rax3000m/immortalwrt-luci.git;master
+src-git-full routing https://github.com/rax3000m/openwrt-routing.git;master
+src-git-full telephony https://github.com/rax3000m/openwrt-telephony.git;master
