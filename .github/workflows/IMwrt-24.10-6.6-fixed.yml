@@ -505,6 +505,17 @@ jobs:
             exit 1
           fi
 
+      - name: 编译前检查磁盘空间
+        run: |
+          MIN_SPACE=10
+          AVAILABLE=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
+          if [ -z "$AVAILABLE" ] || [ "$AVAILABLE" -lt "$MIN_SPACE" ]; then
+            echo "错误：磁盘空间不足，可用空间 ${AVAILABLE}G，需至少 ${MIN_SPACE}G"
+            exit 1
+          fi
+          echo "可用磁盘空间：${AVAILABLE}G"
+          df -hT
+
       - name: 编译固件
         id: compile
         timeout-minutes: 180
