@@ -498,8 +498,8 @@ jobs:
             else
               echo "Flag -Wno-error=format-nonliteral already exists, skipping modification."
             fi
-            echo "Modify nfs-kernel-server Makefile:"
-            cat feeds/packages/net/nfs-kernel-server/Makefile
+            # echo "Modify nfs-kernel-server Makefile:"
+            # cat feeds/packages/net/nfs-kernel-server/Makefile
           else
             echo "Error: Makefile not found at feeds/packages/net/nfs-kernel-server/Makefile"
             exit 1
