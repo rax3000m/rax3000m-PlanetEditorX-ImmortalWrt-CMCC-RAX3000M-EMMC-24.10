@@ -342,6 +342,10 @@ jobs:
           ./scripts/feeds update -a || { echo "更新 Feeds 失败"; exit 1; }
           ./scripts/feeds install -a || { echo "安装 Feeds 失败"; exit 1; }
 
+          cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
+          mkdir -p feeds/luci/applications/luci-app-cifs/luasrc/view/cifs
+          cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
+
       - name: 安装iStore商店
         if: (github.event.inputs.istore == 'true')
         run: |
