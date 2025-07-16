@@ -281,6 +281,10 @@ jobs:
             echo "检测到 openwrt 目录已存在，正在清理..."
             rm -rf /workdir/openwrt
           fi
+
+          mkdir -p /mnt/workspace
+          ln -s /mnt/workspace ./workdir
+
           for i in {1..3}; do
             git clone $REPO_URL -b $REPO_BRANCH openwrt && break
             echo "克隆失败，重试 $i/3"
