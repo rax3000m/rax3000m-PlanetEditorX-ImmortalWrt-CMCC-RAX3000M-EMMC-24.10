@@ -299,7 +299,8 @@ jobs:
           fi
 
           for i in {1..3}; do
-            git clone $REPO_URL -b $REPO_BRANCH openwrt && break
+            # git clone $REPO_URL -b $REPO_BRANCH openwrt && break
+            git clone --depth=1 --single-branch $REPO_URL -b $REPO_BRANCH openwrt && break
             echo "克隆失败，重试 $i/3"
             sleep 5
           done
@@ -309,7 +310,7 @@ jobs:
           fi
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
 
-          # 利用挂载在 /mnt/ 的 14G 额外空间:
+          # 利用挂载在 /mnt/ 的额外空间:
           sudo mkdir -p -m 777 /mnt/openwrt/dl /mnt/openwrt/feeds /mnt/openwrt/build_dir
           ln -s /mnt/openwrt/dl /workdir/openwrt/dl
           ln -s /mnt/openwrt/feeds /workdir/openwrt/feeds
@@ -372,6 +373,10 @@ jobs:
           cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
           mkdir -p feeds/luci/applications/luci-app-cifs/luasrc/view/cifs
           cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
+
+          #添加编译日期标识
+          sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + ' 编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
+          cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
 
       - name: 安装iStore商店
         if: (github.event.inputs.istore == 'true')
