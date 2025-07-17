@@ -275,15 +275,15 @@ jobs:
         with:
           # this might remove tools that are actually needed,
           # when set to "true" but frees about 6 GB
-          tool-cache: true
+          tool-cache: false
 
           # all of these default to true, but feel free to set to
           # "false" if necessary for your workflow
-          android: false
-          dotnet: false
-          haskell: false
-          large-packages: false
-          swap-storage: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
 
       - name: 安装 GitHub CLI
         run: |
@@ -450,6 +450,13 @@ jobs:
         uses: P3TERX/ssh2actions@v1.0.0
         if: (github.event.inputs.ssh == 'true')
 
+      - name: 上传 feeds
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt_feeds
+          path: |
+            openwrt/feeds
+
       - name: 上传 .config
         uses: actions/upload-artifact@v4
         #if: (github.event.inputs.ssh == 'true')
@@ -554,7 +561,7 @@ jobs:
 
       - name: 编译固件
         id: compile
-        timeout-minutes: 180
+        timeout-minutes: 360
         run: |
           set -e
           cd openwrt
@@ -771,38 +778,38 @@ jobs:
           path: last_checked_sha.txt
           key: ${{ env.REPO_PATH }}-${{ env.REPO_BRANCH }}-last-checked-sha
 
-      - name: 清理旧 Releases
-        if: steps.tag.outputs.status == 'success'
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
-          MATRIX_DEVICE_MODEL: ${{ matrix.device_model }}
-          CURRENT_RELEASE: ${{ env.RELEASE_TAG }}
-        run: |
-          echo "当前设备型号: $MATRIX_DEVICE_MODEL"
-          echo "当前保留 Release: $CURRENT_RELEASE"
-          gh --version
-          RELEASES=$(gh release list --repo ${{ github.repository }} --limit 100 --json name --jq ".[] | select(.name | test(\"ImmortalWrt-24.10-$MATRIX_DEVICE_MODEL\")) | .name")
-          echo "待删除的 Releases: $RELEASES"
-          if [ -n "$RELEASES" ]; then
-            for RELEASE in $RELEASES; do
-              if [ "$RELEASE" = "$CURRENT_RELEASE" ]; then
-                echo "跳过当前 Release: $RELEASE"
-                continue
-              fi
-              gh release delete "$RELEASE" --yes || { echo "删除 Release $RELEASE 失败"; exit 1; }
-            done
-          else
-            echo "无需清理旧 Releases"
-          fi
+      # - name: 清理旧 Releases
+      #   if: steps.tag.outputs.status == 'success'
+      #   continue-on-error: true
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+      #     MATRIX_DEVICE_MODEL: ${{ matrix.device_model }}
+      #     CURRENT_RELEASE: ${{ env.RELEASE_TAG }}
+      #   run: |
+      #     echo "当前设备型号: $MATRIX_DEVICE_MODEL"
+      #     echo "当前保留 Release: $CURRENT_RELEASE"
+      #     gh --version
+      #     RELEASES=$(gh release list --repo ${{ github.repository }} --limit 100 --json name --jq ".[] | select(.name | test(\"ImmortalWrt-24.10-$MATRIX_DEVICE_MODEL\")) | .name")
+      #     echo "待删除的 Releases: $RELEASES"
+      #     if [ -n "$RELEASES" ]; then
+      #       for RELEASE in $RELEASES; do
+      #         if [ "$RELEASE" = "$CURRENT_RELEASE" ]; then
+      #           echo "跳过当前 Release: $RELEASE"
+      #           continue
+      #         fi
+      #         gh release delete "$RELEASE" --yes || { echo "删除 Release $RELEASE 失败"; exit 1; }
+      #       done
+      #     else
+      #       echo "无需清理旧 Releases"
+      #     fi
 
       - name: 清理临时文件
         if: always() # 确保始终执行
         run: rm -f ${{ env.BUILD_COMMIT_MSGS_FILE }} ${{ env.CHECKED_COMMIT_MSGS_FILE }}
 
-      - name: 清理旧工作流运行
-        if: steps.tag.outputs.status == 'success'
-        uses: Mattraks/delete-workflow-runs@v2
-        with:
-          retain_days: 7
-          keep_minimum_runs: 2
+      # - name: 清理旧工作流运行
+      #   if: steps.tag.outputs.status == 'success'
+      #   uses: Mattraks/delete-workflow-runs@v2
+      #   with:
+      #     retain_days: 7
+      #     keep_minimum_runs: 2
