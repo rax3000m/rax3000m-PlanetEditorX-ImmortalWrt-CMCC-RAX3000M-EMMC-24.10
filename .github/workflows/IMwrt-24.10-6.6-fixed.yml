@@ -245,6 +245,7 @@ jobs:
             exit 1
           fi
           echo "可用磁盘空间：${AVAILABLE}G"
+          df -hT
 
       - name: 初始化环境
         env:
@@ -297,9 +298,6 @@ jobs:
             rm -rf /workdir/openwrt
           fi
 
-          mkdir -p /mnt/workspace
-          ln -s /mnt/workspace ./workdir
-
           for i in {1..3}; do
             git clone $REPO_URL -b $REPO_BRANCH openwrt && break
             echo "克隆失败，重试 $i/3"
@@ -310,6 +308,16 @@ jobs:
             exit 1
           fi
           ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+          # 利用挂载在 /mnt/ 的 14G 额外空间:
+          sudo mkdir -p -m 777 /mnt/openwrt/dl /mnt/openwrt/feeds /mnt/openwrt/build_dir
+          ln -s /mnt/openwrt/dl /workdir/openwrt/dl
+          ln -s /mnt/openwrt/feeds /workdir/openwrt/feeds
+          ln -s /mnt/openwrt/build_dir /workdir/openwrt/build_dir
+          df -hT
+
+          # mkdir -p /mnt/workspace
+          # ln -s /mnt/workspace ./workdir
 
       - name: 获取源码提交 SHA
         run: |
