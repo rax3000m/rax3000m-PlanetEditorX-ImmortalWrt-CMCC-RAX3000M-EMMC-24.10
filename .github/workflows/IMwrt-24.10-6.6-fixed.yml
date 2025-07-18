@@ -79,6 +79,7 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
   BUILD_COMMIT_MSGS_FILE: ''
   CHECKED_COMMIT_MSGS_FILE: ''
+  BUILD_TIME: $(date +'%Y-%m-%d %H:%M:%S')
 
 jobs:
   check-source-updates:
@@ -186,9 +187,7 @@ jobs:
           echo "5G 25dB: ${{ env.ENABLE_5G_25DB }}"
           echo "上传 bin 目录: ${{ github.event.inputs.upload_bin_dir }}"
           echo "LAN_IP: $LAN_IP"
-          echo "BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
           echo "编译时间: ${{ env.BUILD_TIME }}"
-          env
 
       - name: 检出代码
         uses: actions/checkout@v4
