@@ -563,11 +563,19 @@ jobs:
         run: |
           pwd
           tree /workdir -a | tee directory-structure.txt
+          tree /mnt/openwrt/dl -a | tee openwrt-dl-structure.txt
+          tree /mnt/openwrt/feeds -a | tee openwrt-feeds-structure.txt
+          tree /mnt/openwrt/build_dir -a | tee openwrt-build_dir-structure.txt
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: directory-structure
-          path: directory-structure.txt
+          path: |
+            directory-structure.txt
+            openwrt-*-strstructure.txt
+
+      - name: test Exit workflow
+        run: exit 0
 
       - name: 编译固件
         id: compile
