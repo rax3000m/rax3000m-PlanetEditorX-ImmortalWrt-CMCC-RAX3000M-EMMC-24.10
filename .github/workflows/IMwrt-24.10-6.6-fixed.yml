@@ -187,7 +187,7 @@ jobs:
           echo "上传 bin 目录: ${{ github.event.inputs.upload_bin_dir }}"
           echo "LAN_IP: $LAN_IP"
           echo "BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
-          echo "编译时间: ${{ env.BUILD_TIME}}
+          echo "编译时间: ${{ env.BUILD_TIME}} "
 
       - name: 检出代码
         uses: actions/checkout@v4
