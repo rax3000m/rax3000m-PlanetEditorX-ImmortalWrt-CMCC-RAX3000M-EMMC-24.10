@@ -399,7 +399,7 @@ jobs:
           cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
 
           #添加编译日期标识
-          sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + ' 编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
+          sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/\1 + ' 编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
           cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
 
       - name: 安装iStore商店
