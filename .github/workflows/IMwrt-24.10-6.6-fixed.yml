@@ -560,7 +560,9 @@ jobs:
           df -hT
 
       - name: 保存目录结构
-        run: tree . -a | tee directory-structure.txt
+        run: |
+          pwd
+          tree / -a | tee directory-structure.txt
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
