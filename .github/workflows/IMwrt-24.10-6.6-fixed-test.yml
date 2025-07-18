@@ -3,7 +3,7 @@ name: testCache
 on:
   repository_dispatch:
     types: [build_firmware]
-  push:
+  # push:
   #   branches: [ main ]
   workflow_dispatch:
     inputs:

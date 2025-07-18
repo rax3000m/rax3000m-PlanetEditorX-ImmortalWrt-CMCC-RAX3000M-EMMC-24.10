@@ -3,7 +3,7 @@ name: IMwrt-24.10-6.6-fixed
 on:
   repository_dispatch:
     types: [build_firmware]
-  # push:
+  push:
   #   branches: [ main ]
   workflow_dispatch:
     inputs:
@@ -186,6 +186,8 @@ jobs:
           echo "5G 25dB: ${{ env.ENABLE_5G_25DB }}"
           echo "上传 bin 目录: ${{ github.event.inputs.upload_bin_dir }}"
           echo "LAN_IP: $LAN_IP"
+          echo "BUILD_TIME=$(date +'%Y-%m-%d %H:%M:%S')" >> $GITHUB_ENV
+          echo "编译时间: ${{ evn.BUILD_TIME}}
 
       - name: 检出代码
         uses: actions/checkout@v4
@@ -320,6 +322,31 @@ jobs:
           # mkdir -p /mnt/workspace
           # ln -s /mnt/workspace ./workdir
 
+      - name: 缓存编译依赖
+        id: cache-openwrt
+        uses: actions/cache@v4
+        with:
+          path: |
+            # /mnt/openwrt/dl
+            /workdir/openwrt/dl
+            # /mnt/openwrt/feeds
+            /workdir/openwrt/feeds
+            # /mnt/openwrt/build_dir
+            # /workdir/openwrt/build_dir
+          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('/workdir/openwrt/feeds.conf.default') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
+            ${{ runner.os }}-build-${{ env.REPO_URL }}
+
+      - name: 📣 Log Cache Status
+        run: |
+          if [ "${{ steps.cache-openwrt.outputs.cache-hit }}" == 'true' ]; then
+            echo "✅ Cache HIT: 使用缓存成功"
+          else
+            echo "❌ Cache MISS: 首次编译或配置已变更，未命中缓存"
+          fi
+          echo "CACHE_HIT=${{ steps.cache.outputs.cache-hit }}" >> $GITHUB_ENV
+
       - name: 获取源码提交 SHA
         run: |
           if [ -f last_checked_sha.txt ]; then
@@ -370,13 +397,13 @@ jobs:
           ./scripts/feeds update -a || { echo "更新 Feeds 失败"; exit 1; }
           ./scripts/feeds install -a || { echo "安装 Feeds 失败"; exit 1; }
 
-          cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
+          # cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
           mkdir -p feeds/luci/applications/luci-app-cifs/luasrc/view/cifs
           cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
 
           #添加编译日期标识
-          sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + ' 编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
-          cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
+          sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + '  编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
+          # cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
 
       - name: 安装iStore商店
         if: (github.event.inputs.istore == 'true')
