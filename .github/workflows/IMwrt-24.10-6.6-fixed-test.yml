@@ -109,30 +109,6 @@ jobs:
       - name: 设置 REPO_PATH
         run: echo "REPO_PATH=$(echo $REPO_URL | sed -E 's#https://github.com/##;s#/$##')" >> $GITHUB_ENV
 
-      - name: 缓存编译依赖
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /mnt/openwrt/dl
-            # /workdir/openwrt/dl
-            /mnt/openwrt/feeds
-            # /workdir/openwrt/feeds
-            # /mnt/openwrt/build_dir
-            # /workdir/openwrt/build_dir
-          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
-
-      - name: 📣 Log Cache Status
-        run: |
-          if [ "${{ steps.cache.outputs.cache-hit }}" == 'true' ]; then
-            echo "✅ Cache HIT: 使用缓存成功"
-          else
-            echo "❌ Cache MISS: 首次编译或配置已变更，未命中缓存"
-          fi
-          echo "CACHE_HIT=${{ steps.cache.outputs.cache-hit }}" >> $GITHUB_ENV
-
       - name: 获取 last_checked_sha 缓存
         id: cache-sha
         uses: actions/cache@v4
@@ -343,6 +319,30 @@ jobs:
 
           # mkdir -p /mnt/workspace
           # ln -s /mnt/workspace ./workdir
+
+      - name: 缓存编译依赖
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /mnt/openwrt/dl
+            # /workdir/openwrt/dl
+            /mnt/openwrt/feeds
+            # /workdir/openwrt/feeds
+            # /mnt/openwrt/build_dir
+            # /workdir/openwrt/build_dir
+          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
+
+      - name: 📣 Log Cache Status
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" == 'true' ]; then
+            echo "✅ Cache HIT: 使用缓存成功"
+          else
+            echo "❌ Cache MISS: 首次编译或配置已变更，未命中缓存"
+          fi
+          echo "CACHE_HIT=${{ steps.cache.outputs.cache-hit }}" >> $GITHUB_ENV
 
       - name: 获取源码提交 SHA
         run: |
