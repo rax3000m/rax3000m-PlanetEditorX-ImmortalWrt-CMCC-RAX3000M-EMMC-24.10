@@ -331,7 +331,7 @@ jobs:
             /workdir/openwrt/feeds
             # /mnt/openwrt/build_dir
             # /workdir/openwrt/build_dir
-          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
+          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('rax3000m-PlanetEditorX-ImmortalWrt-CMCC-RAX3000M-EMMC-24.10/config/feeds.conf.default') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
 
@@ -609,6 +609,6 @@ jobs:
             /workdir/openwrt/feeds
             # /mnt/openwrt/build_dir
             # /workdir/openwrt/build_dir
-          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
+          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('rax3000m-PlanetEditorX-ImmortalWrt-CMCC-RAX3000M-EMMC-24.10/config/feeds.conf.default') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
