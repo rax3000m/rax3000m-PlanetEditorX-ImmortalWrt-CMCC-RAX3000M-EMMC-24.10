@@ -325,10 +325,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            /mnt/openwrt/dl
-            # /workdir/openwrt/dl
-            /mnt/openwrt/feeds
-            # /workdir/openwrt/feeds
+            # /mnt/openwrt/dl
+            /workdir/openwrt/dl
+            # /mnt/openwrt/feeds
+            /workdir/openwrt/feeds
             # /mnt/openwrt/build_dir
             # /workdir/openwrt/build_dir
           key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
@@ -603,10 +603,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            /mnt/openwrt/dl
-            # /workdir/openwrt/dl
-            /mnt/openwrt/feeds
-            # /workdir/openwrt/feeds
+            # /mnt/openwrt/dl
+            /workdir/openwrt/dl
+            # /mnt/openwrt/feeds
+            /workdir/openwrt/feeds
             # /mnt/openwrt/build_dir
             # /workdir/openwrt/build_dir
           key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
