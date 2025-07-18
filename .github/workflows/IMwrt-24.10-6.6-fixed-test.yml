@@ -599,7 +599,7 @@ jobs:
             openwrt-*-strstructure.txt
 
       - name: 缓存编译依赖
-        id: cache
+        id: cacheend
         uses: actions/cache@v4
         with:
           path: |
