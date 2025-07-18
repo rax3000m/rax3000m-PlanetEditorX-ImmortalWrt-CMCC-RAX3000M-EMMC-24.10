@@ -257,7 +257,7 @@ jobs:
           sudo apt-get install -y build-essential ccache cmake curl git gawk gcc-multilib g++-multilib \
             libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev \
             libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool \
-            ninja-build python3 python3-pyelftools rsync unzip vim wget zlib1g-dev
+            ninja-build python3 python3-pyelftools rsync unzip vim wget zlib1g-dev tree
           sudo apt-get autoremove --purge
           sudo apt-get clean
           sudo timedatectl set-timezone "$TZ"
@@ -559,6 +559,14 @@ jobs:
           echo "可用磁盘空间：${AVAILABLE}G"
           df -hT
 
+      - name: 保存目录结构
+        run: tree . -a | tee directory-structure.txt
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: directory-structure
+          path: directory-structure.txt
+
       - name: 编译固件
         id: compile
         timeout-minutes: 360
@@ -588,7 +596,8 @@ jobs:
         if: steps.compile.outputs.status == 'success'
         run: |
           cd openwrt
-          VERSION=$(git rev-parse --short HEAD || echo "unknown")
+          # 获取当前分支最新提交的10位短哈希值
+          VERSION=$(git rev-parse --short=10 HEAD || echo "unknown")
           SAFE_VERSION="r${VERSION}"
           echo "提取的版本号: $SAFE_VERSION"
           echo "FIRMWARE_VERSION=$SAFE_VERSION" >> $GITHUB_ENV
