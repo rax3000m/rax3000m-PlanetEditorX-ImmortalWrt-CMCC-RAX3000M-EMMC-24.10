@@ -321,7 +321,7 @@ jobs:
           # ln -s /mnt/workspace ./workdir
 
       - name: 缓存编译依赖
-        id: cache
+        id: cache-openwrt
         uses: actions/cache@v4
         with:
           path: |
@@ -331,13 +331,14 @@ jobs:
             /workdir/openwrt/feeds
             # /mnt/openwrt/build_dir
             # /workdir/openwrt/build_dir
-          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('rax3000m-PlanetEditorX-ImmortalWrt-CMCC-RAX3000M-EMMC-24.10/config/feeds.conf.default') }}
+          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('/workdir/openwrt/feeds.conf.default') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
+            ${{ runner.os }}-build-${{ env.REPO_URL }}
 
       - name: 📣 Log Cache Status
         run: |
-          if [ "${{ steps.cache.outputs.cache-hit }}" == 'true' ]; then
+          if [ "${{ steps.cache-openwrt.outputs.cache-hit }}" == 'true' ]; then
             echo "✅ Cache HIT: 使用缓存成功"
           else
             echo "❌ Cache MISS: 首次编译或配置已变更，未命中缓存"
@@ -394,7 +395,7 @@ jobs:
           ./scripts/feeds update -a || { echo "更新 Feeds 失败"; exit 1; }
           ./scripts/feeds install -a || { echo "安装 Feeds 失败"; exit 1; }
 
-          cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
+          # cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
           mkdir -p feeds/luci/applications/luci-app-cifs/luasrc/view/cifs
           cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
 
@@ -598,17 +599,17 @@ jobs:
             directory-structure.txt
             openwrt-*-strstructure.txt
 
-      - name: 缓存编译依赖
-        # id: cacheend
-        uses: actions/cache@v4
-        with:
-          path: |
-            # /mnt/openwrt/dl
-            /workdir/openwrt/dl
-            # /mnt/openwrt/feeds
-            /workdir/openwrt/feeds
-            # /mnt/openwrt/build_dir
-            # /workdir/openwrt/build_dir
-          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('rax3000m-PlanetEditorX-ImmortalWrt-CMCC-RAX3000M-EMMC-24.10/config/feeds.conf.default') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
+      # - name: 缓存编译依赖
+      #   # id: cacheend
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: |
+      #       # /mnt/openwrt/dl
+      #       /workdir/openwrt/dl
+      #       # /mnt/openwrt/feeds
+      #       /workdir/openwrt/feeds
+      #       # /mnt/openwrt/build_dir
+      #       # /workdir/openwrt/build_dir
+      #     key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ hashFiles('rax3000m-PlanetEditorX-ImmortalWrt-CMCC-RAX3000M-EMMC-24.10/config/feeds.conf.default') }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
