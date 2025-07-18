@@ -1,0 +1,601 @@
+name: testCache
+
+on:
+  repository_dispatch:
+    types: [build_firmware]
+  push:
+  #   branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      device_model:
+        description: '选择目标设备型号'
+        type: choice
+        required: true
+        options:
+          - cmcc_rax3000m-emmc
+      LAN_IP:
+        description: '设置 LAN IP 地址'
+        required: true
+        default: '192.168.6.1'
+      enable_5g_25db:
+        description: '启用 5G 25dB 修改'
+        type: boolean
+        required: true
+        default: true
+      upload_bin_dir:
+        description: '上传 bin 目录'
+        type: boolean
+        required: true
+        default: true
+      repo_url:
+        description: '源仓库 URL'
+        default: 'https://github.com/rax3000m/padavanonly-immortalwrt-mt798x-6.6-Fixed'
+        type: choice
+        options:
+          - 'https://github.com/rax3000m/padavanonly-immortalwrt-mt798x-6.6-Fixed'
+          - 'https://github.com/padavanonly/immortalwrt-mt798x-6.6'
+      repo_branch:
+        description: '源仓库分支'
+        default: 'openwrt-24.10-6.6-Fixed'
+        type: choice
+        options:
+          - 'openwrt-24.10-6.6-Fixed'
+          - 'openwrt-24.10-6.6'
+      config_file:
+        description: '配置文件'
+        default: '24.10-6.6.config'
+        type: choice
+        options:
+          - '24.10-6.6.config'
+      istore:
+        description: '集成iStore商店'
+        type: boolean
+        required: true
+        default: false
+      ssh:
+        description: 'SSH connection to Actions'
+        type: boolean
+        required: true
+        default: true
+
+  schedule:
+    - cron: '0 16 * * *' # 北京时间每天00:00
+
+permissions:
+  contents: write
+  actions: write
+
+env:
+  REPO_URL: ${{ github.event.inputs.repo_url || 'https://github.com/rax3000m/padavanonly-immortalwrt-mt798x-6.6-Fixed' }}
+  REPO_BRANCH: ${{ github.event.inputs.repo_branch || 'openwrt-24.10-6.6-Fixed' }}
+  FEEDS_CONF: config/feeds.conf.default
+  CONFIG_FILE: ${{ github.event.inputs.config_file || '24.10-6.6.config' }}
+  DIY_P1_SH: scripts/24.10-6.6/diy-part1.sh
+  DIY_P2_SH: scripts/24.10-6.6/diy-part2.sh
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+  TZ: Asia/Shanghai
+  ENABLE_5G_25DB: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_5g_25db || secrets.ENABLE_5G_25DB || 'true' }}
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+  BUILD_COMMIT_MSGS_FILE: ''
+  CHECKED_COMMIT_MSGS_FILE: ''
+
+jobs:
+  check-source-updates:
+    runs-on: ubuntu-22.04
+    outputs:
+      should_build: ${{ steps.check.outputs.should_build }}
+      latest_commit_message: ${{ steps.check.outputs.LATEST_COMMIT_MESSAGE }}
+
+    steps:
+      - name: 检出本仓库代码
+        uses: actions/checkout@v4
+
+      - name: Check Server Performance
+        run: |
+          echo "警告⚠"
+          echo "分配的服务器性能有限，若选择的插件过多，务必注意CPU性能！"
+          echo -e "已知CPU型号(降序): 7763，8370C，8272CL，8171M，E5-2673\n"
+          echo "--------------------------CPU信息--------------------------"
+          echo "CPU物理数量: $(cat /proc/cpuinfo | grep "physical id" | sort | uniq | wc -l)"
+          echo "CPU核心数量: $(nproc)"
+          echo -e "CPU型号信息:$(cat /proc/cpuinfo | grep -m1 name | awk -F: '{print $2}')\n"
+          echo "--------------------------内存信息--------------------------"
+          echo "已安装内存详细信息:"
+          echo -e "$(sudo lshw -short -C memory | grep GiB)\n"
+          echo "--------------------------硬盘信息--------------------------"
+          echo "硬盘数量: $(ls /dev/sd* | grep -v [1-9] | wc -l)" && df -hT
+
+      - name: 设置 REPO_PATH
+        run: echo "REPO_PATH=$(echo $REPO_URL | sed -E 's#https://github.com/##;s#/$##')" >> $GITHUB_ENV
+
+
+      - name: 缓存编译依赖
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+          /mnt/openwrt/dl
+          # /workdir/openwrt/dl
+          /mnt/openwrt/feeds
+          # /workdir/openwrt/feeds
+          # /mnt/openwrt/build_dir
+          # /workdir/openwrt/build_dir
+          key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
+
+      - name: 📣 Log Cache Status
+        run: |
+          if [ "${{ steps.cache.outputs.cache-hit }}" == 'true' ]; then
+            echo "✅ Cache HIT: 使用缓存成功"
+          else
+            echo "❌ Cache MISS: 首次编译或配置已变更，未命中缓存"
+          fi
+          echo "CACHE_HIT=${{ steps.cache.outputs.cache-hit }}" >> $GITHUB_ENV
+
+      - name: 获取 last_checked_sha 缓存
+        id: cache-sha
+        uses: actions/cache@v4
+        with:
+          path: last_checked_sha.txt
+          key: ${{ env.REPO_PATH }}-${{ env.REPO_BRANCH }}-last-checked-sha
+
+      - name: 安装 GitHub CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gh
+
+      - name: 检查源仓库更新
+        id: check
+        run: |
+          echo $REPO_PATH
+          echo $REPO_BRANCH
+          LATEST_URL=$(curl -s -f -H "Accept: application/vnd.github.v3+json" \
+          "https://api.github.com/repos/${REPO_PATH}/commits/$REPO_BRANCH" | jq -r '.url' || echo "")
+          echo "跳转URL：" $LATEST_URL
+          response=$(curl -s -f -H "Accept: application/vnd.github.v3+json" "$LATEST_URL")
+          LATEST_SHA=$(echo "$response" | jq -r '.sha' || echo "")
+          # LATEST_COMMIT_MESSAGE=$(echo "$response" | jq -r '.commit.message' || echo "")
+          LATEST_COMMIT_MESSAGE=$(echo "$response" | jq -r '.commit.message' | tr -d '\n' || echo "")
+          LATEST_COMMIT_MESSAGE=$(echo "$LATEST_COMMIT_MESSAGE" | cut -c1-100) # 限制长度
+          if [ -z "$LATEST_SHA" ] || [ "$LATEST_SHA" = "null" ]; then
+            echo "无法获取最新 SHA，跳过编译"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+            echo "LATEST_COMMIT_MESSAGE=" >> $GITHUB_OUTPUT
+          fi
+          echo "源仓库最新提交 sha: $LATEST_SHA"
+          echo "LATEST_SHA=$LATEST_SHA" >> $GITHUB_ENV
+
+          LAST_CHECKED_FILE="last_checked_sha.txt"
+          LAST_CHECKED_SHA=$(cat "$LAST_CHECKED_FILE" 2>/dev/null || echo "")
+
+          if [ -n "$LAST_CHECKED_SHA" ]; then
+              echo "缓存中找到上次检查的 SHA： $LAST_CHECKED_SHA"
+          else
+              echo "缓存中未找到上次检查的 SHA"
+          fi
+
+          if [ "$LATEST_SHA" != "$LAST_CHECKED_SHA" ]; then
+            echo "检测到源仓库更新：$LATEST_SHA"
+            echo "should_build=true" >> $GITHUB_OUTPUT
+            echo "$LATEST_SHA" > "$LAST_CHECKED_FILE"
+            echo "LATEST_COMMIT_MESSAGE=$LATEST_COMMIT_MESSAGE" >> $GITHUB_OUTPUT
+            echo "最新提交信息: $LATEST_COMMIT_MESSAGE" # For logging
+          else
+            echo "源仓库无更新，跳过编译"
+            echo "should_build=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: check-source-updates
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || needs.check-source-updates.outputs.should_build == 'true'
+    runs-on: ubuntu-22.04
+    name: 编译 ${{ matrix.device_model }}
+    strategy:
+      matrix:
+        device_model: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.device_model && fromJSON(format('["{0}"]', github.event.inputs.device_model)) || fromJSON('["cmcc_rax3000m-emmc"]') }}
+      max-parallel: 18
+
+    # Job 级别的环境变量：这些变量会根据触发事件动态设置
+    env:
+      # LAN_IP: 如果是 workflow_dispatch 触发，则使用输入的 LAN_IP，否则使用默认值 '192.168.6.1'
+      LAN_IP: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.LAN_IP || '192.168.6.1' }}
+
+    steps:
+      - name: 调试信息
+        run: |
+          echo "触发方式: ${{ github.event_name }}"
+          echo "EVENT_TRIGGER_METHOD=${{ github.event_name }}" >> $GITHUB_ENV
+          echo "设备型号: ${{ matrix.device_model }}"
+          echo "5G 25dB: ${{ env.ENABLE_5G_25DB }}"
+          echo "上传 bin 目录: ${{ github.event.inputs.upload_bin_dir }}"
+          echo "LAN_IP: $LAN_IP"
+
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 获取完整的提交历史
+
+      - name: 输出最近的 5 条提交日志
+        run: git log -n 5
+
+      - name: 设置 REPO_PATH
+        run: echo "REPO_PATH=$(echo $REPO_URL | sed -E 's#https://github.com/##;s#/$##')" >> $GITHUB_ENV
+
+      - name: 获取上次提交sha缓存
+        uses: actions/cache@v4
+        with:
+          path: last_build_sha.txt
+          key: ${{ env.REPO_PATH }}-${{ env.REPO_BRANCH }}-last-build-sha
+
+      - name: 获取 last_checked_sha 缓存
+        uses: actions/cache@v4
+        with:
+          path: last_checked_sha.txt
+          key: ${{ env.REPO_PATH }}-${{ env.REPO_BRANCH }}-last-checked-sha
+
+      - name: 设置最新提交信息
+        run: |
+          if [ -f last_build_sha.txt ]; then
+            LAST_BUILD_SHA=$(cat last_build_sha.txt)
+            echo "读取到上次提交 SHA: $LAST_BUILD_SHA"
+          else
+            LAST_BUILD_SHA=""
+            echo "last_build_sha.txt 文件不存在，无法获取上次提交 SHA"
+          fi
+
+          if [ -z "$LAST_BUILD_SHA" ]; then
+            echo "LAST_BUILD_SHA 为空，无法获取上次提交信息"
+          else
+            # 生成临时文件
+            TEMP_FILE=$(mktemp)
+            # 从上次提交 SHA 到当前 HEAD 的提交信息
+            git log $LAST_BUILD_SHA..HEAD --pretty=format:"%s" | awk '!a[$0]++' | sed 's/^/- /' > "$TEMP_FILE"
+            echo "BUILD_COMMIT_MSGS_FILE=$TEMP_FILE" >> $GITHUB_ENV
+          fi
+          if [ -z "$TEMP_FILE" ]; then
+            echo "本仓库无更新"
+          else
+            echo "本仓库更新信息:"
+            cat $TEMP_FILE
+          fi
+
+      - name: 检查磁盘空间
+        run: |
+          MIN_SPACE=10
+          AVAILABLE=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
+          if [ -z "$AVAILABLE" ] || [ "$AVAILABLE" -lt "$MIN_SPACE" ]; then
+            echo "错误：磁盘空间不足，可用空间 ${AVAILABLE}G，需至少 ${MIN_SPACE}G"
+            exit 1
+          fi
+          echo "可用磁盘空间：${AVAILABLE}G"
+          df -hT
+
+      - name: 初始化环境
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          sudo apt-get update
+          sudo apt-get install -y build-essential ccache cmake curl git gawk gcc-multilib g++-multilib \
+            libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev \
+            libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool \
+            ninja-build python3 python3-pyelftools rsync unzip vim wget zlib1g-dev tree
+          sudo apt-get autoremove --purge
+          sudo apt-get clean
+          sudo timedatectl set-timezone "$TZ"
+          sudo mkdir -p /workdir
+          sudo chown $USER:$GROUPS /workdir
+
+      - name: 配置 ccache
+        run: |
+          echo "export PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
+          echo "export CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
+          ccache -M 5G
+
+      - name: 清理磁盘空间(Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          # this might remove tools that are actually needed,
+          # when set to "true" but frees about 6 GB
+          tool-cache: false
+
+          # all of these default to true, but feel free to set to
+          # "false" if necessary for your workflow
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          swap-storage: true
+
+      - name: 安装 GitHub CLI
+        run: |
+          sudo apt-get install -y gh
+
+      - name: 克隆源码
+        working-directory: /workdir
+        run: |
+          df -hT $PWD
+          if [ -d "/workdir/openwrt" ]; then
+            echo "检测到 openwrt 目录已存在，正在清理..."
+            rm -rf /workdir/openwrt
+          fi
+
+          for i in {1..3}; do
+            # git clone $REPO_URL -b $REPO_BRANCH openwrt && break
+            git clone --depth=1 --single-branch $REPO_URL -b $REPO_BRANCH openwrt && break
+            echo "克隆失败，重试 $i/3"
+            sleep 5
+          done
+          if [ ! -d "/workdir/openwrt" ]; then
+            echo "错误：源码克隆失败"
+            exit 1
+          fi
+          ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt
+
+          # 利用挂载在 /mnt/ 的额外空间:
+          sudo mkdir -p -m 777 /mnt/openwrt/dl /mnt/openwrt/feeds /mnt/openwrt/build_dir
+          ln -s /mnt/openwrt/dl /workdir/openwrt/dl
+          ln -s /mnt/openwrt/feeds /workdir/openwrt/feeds
+          ln -s /mnt/openwrt/build_dir /workdir/openwrt/build_dir
+          df -hT
+
+          # mkdir -p /mnt/workspace
+          # ln -s /mnt/workspace ./workdir
+
+      - name: 获取源码提交 SHA
+        run: |
+          if [ -f last_checked_sha.txt ]; then
+            LAST_CHECKED_SHA=$(cat last_checked_sha.txt)
+            echo "读取到上次提交 SHA: $LAST_CHECKED_SHA"
+          else
+            LAST_CHECKED_SHA=""
+            echo "last_checked_sha.txt 文件不存在，无法获取上次提交 SHA"
+          fi
+          cd /workdir/openwrt
+          if [ -z "$LAST_CHECKED_SHA" ]; then
+            echo "LAST_CHECKED_SHA 为空，无法获取上次提交信息"
+          else
+            # 生成临时文件
+            TEMP_FILE=$(mktemp)
+            # 从上次提交 SHA 到当前 HEAD 的提交信息
+            git log $LAST_CHECKED_SHA..HEAD --pretty=format:"%s" | awk '!a[$0]++' | sed 's/^/- /' > "$TEMP_FILE"
+            echo "CHECKED_COMMIT_MSGS_FILE=$TEMP_FILE" >> $GITHUB_ENV
+          fi
+          if [ -z "$TEMP_FILE" ]; then
+            echo "源仓库无更新"
+          else
+            echo "源仓库更新信息:"
+            cat $TEMP_FILE
+          fi
+          echo "输出源仓库最近的 5 条提交日志"
+          git log -n 5
+          echo "存入源仓库最新提交信息到文件"
+          echo "$(git rev-parse HEAD)" > /workdir/last_checked_sha.txt
+
+      - name: 移动文件到根目录
+        run: |
+          mv /workdir/last_checked_sha.txt ./last_checked_sha.txt
+          cat last_checked_sha.txt
+
+      - name: 加载 Feeds
+        timeout-minutes: 10
+        run: |
+          [ -e $FEEDS_CONF ] && mv $FEEDS_CONF openwrt/feeds.conf.default
+          chmod +x $DIY_P1_SH
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_P1_SH
+
+      - name: 更新 Feeds
+        timeout-minutes: 30
+        run: |
+          cd openwrt
+          ./scripts/feeds update -a || { echo "更新 Feeds 失败"; exit 1; }
+          ./scripts/feeds install -a || { echo "安装 Feeds 失败"; exit 1; }
+
+          cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
+          mkdir -p feeds/luci/applications/luci-app-cifs/luasrc/view/cifs
+          cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
+
+          #添加编译日期标识
+          sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + ' 编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
+          cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
+
+      - name: 安装iStore商店
+        if: (github.event.inputs.istore == 'true')
+        run: |
+          cd openwrt
+          echo >> feeds.conf.default
+          echo 'src-git istore https://github.com/linkease/istore;main' >> feeds.conf.default
+          ./scripts/feeds update istore
+          ./scripts/feeds install -d y -p istore luci-app-store
+
+      - name: 加载配置
+        run: |
+          [ -e files ] && mv files openwrt/files
+          [ -e config/$CONFIG_FILE ] && mv config/$CONFIG_FILE openwrt/.config
+          echo "CONFIG_TARGET_mediatek_filogic_DEVICE_${{ matrix.device_model }}=y" >> openwrt/.config
+          chmod +x $DIY_P2_SH
+          pwd
+          ls -la
+          cd openwrt
+          $GITHUB_WORKSPACE/$DIY_P2_SH
+          make defconfig
+          # cat .config
+          cp .config upload.config
+          # cat /etc/docker/daemon.json
+          ls -la
+          cd files
+          pwd
+          ls -la
+
+      - name: 下载软件包
+        id: package
+        timeout-minutes: 30
+        run: |
+          cd openwrt
+          make download -j8 || { echo "下载软件包失败"; exit 1; }
+          find dl -size -1024c -exec rm -f {} \;
+
+      - name: 修改 5G 25dB
+        if: env.ENABLE_5G_25DB == 'true'
+        working-directory: ./openwrt
+        run: |
+          EEPROM_FILE=$(find package -name MT7981_iPAiLNA_EEPROM.bin 2>/dev/null | head -n 1)
+          if [ -z "$EEPROM_FILE" ]; then
+            echo "错误：未找到 EEPROM 文件"
+            exit 1
+          fi
+          EXPECTED_CONTENT=$(printf '\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B')
+          CURRENT_CONTENT=$(dd if="$EEPROM_FILE" bs=1 skip=$((0x445)) count=20 2>/dev/null || echo "")
+          if [ "$CURRENT_CONTENT" != "$EXPECTED_CONTENT" ]; then
+            printf '\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B\x2B' | dd of="$EEPROM_FILE" bs=1 seek=$((0x445)) conv=notrunc
+            echo "EEPROM 文件已更新: $EEPROM_FILE"
+          else
+            echo "EEPROM 文件无需修改: $EEPROM_FILE"
+          fi
+
+      - name: 设置LAN IP地址（路由器登录地址）
+        run: |
+          cd openwrt
+          SET_IP="${{ env.LAN_IP }}" # 或者更简洁地写成 SET_IP="$LAN_IP"
+          if [[ $SET_IP =~ ^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; then
+              #修改immortalwrt.lan关联IP
+              sed -i "s/192\.168\.[0-9]*\.[0-9]*/$SET_IP/g" $(find feeds/luci/modules/luci-mod-system -type f -name "flash.js")
+              #修改默认IP地址
+              sed -i "s/192\.168\.[0-9]*\.[0-9]*/$SET_IP/g" package/base-files/files/bin/config_generate
+            echo "设置 LAN IP 地址: $SET_IP"
+          else
+              echo "错误：LAN IP 地址 ($SET_IP) 无效。将使用默认配置。"
+          fi
+
+      - name: SSH链接管理
+        uses: P3TERX/ssh2actions@v1.0.0
+        if: (github.event.inputs.ssh == 'true')
+
+      - name: 上传 feeds
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenWrt_feeds
+          path: |
+            openwrt/feeds
+
+      - name: 上传 .config
+        uses: actions/upload-artifact@v4
+        #if: (github.event.inputs.ssh == 'true')
+        with:
+          name: OpenWrt_config
+          path: openwrt/*.config
+
+      - name: Get Version Info
+        id: versions
+        working-directory: ./openwrt
+        run: |
+          # 获取固件版本
+          # FW_VERSION=$(grep 'REVISION:=' include/version.mk | cut -d'=' -f2 | xargs)
+          # echo "FW_VERSION=${FW_VERSION}" >> $GITHUB_OUTPUT
+
+          if [ ! -f include/version.mk ]; then
+            echo "Error: include/version.mk not found"
+            # exit 1
+          fi
+          FW_VERSION=$(awk -F ':=' '/VERSION_NUMBER:=/ {print $2}' include/version.mk | xargs)
+          if [ -z "$FW_VERSION" ]; then
+            echo "Error: Failed to extract VERSION_NUMBER"
+            # exit 1
+          fi
+          echo "FW_VERSION=${FW_VERSION}" >> $GITHUB_OUTPUT
+
+          # 获取内核版本 (从 .config 文件)
+          KERNEL_CONFIG_LINE=$(grep 'CONFIG_LINUX_.*=y' .config | grep -E 'CONFIG_LINUX_[0-9]+_[0-9]+=y' | head -n1)
+          KERNEL_VERSION=$(echo $KERNEL_CONFIG_LINE | sed -e 's/CONFIG_LINUX_//' -e 's/=y//' -e 's/_/./')
+          echo "KERNEL_VERSION=${KERNEL_VERSION}" >> $GITHUB_OUTPUT
+
+          echo "固件版本: ${FW_VERSION}"
+          echo "内核版本: ${KERNEL_VERSION}"
+
+      - name: Extract and Display Kernel Version
+        id: get_kernel_version
+        run: |
+          cd openwrt
+          # 检查 .config 文件是否存在
+          if [ ! -f ".config" ]; then
+            echo "错误: .config 文件未找到。请确保在运行此步骤之前已生成配置文件。"
+            #exit 1
+          fi
+
+          # 步骤 1: 从 .config 文件中读取当前配置的内核主版本
+          # 我们查找 CONFIG_TARGET_KERNEL_PARTSIZE 或类似的变量来确定版本
+          # 并用 cut 和 tr 命令提取出纯净的版本号，例如 "6.6"
+          BASE_VER=$(grep 'CONFIG_TARGET_KERNEL_PARTSIZE' .config | cut -d'=' -f2 | tr -d '"')
+
+          if [ -z "$BASE_VER" ]; then
+            echo "错误: 无法从 .config 文件中确定内核版本。"
+            #exit 1
+          fi
+
+          # 步骤 2: 构建内核版本信息文件的完整路径
+          KERNEL_CONFIG_FILE="include/kernel-${BASE_VER}"
+
+          if [ ! -f "$KERNEL_CONFIG_FILE" ]; then
+            echo "错误: 内核版本文件 '$KERNEL_CONFIG_FILE' 未找到！"
+            #exit 1
+          fi
+
+          # 步骤 3: 从版本文件中提取补丁版本号
+          PATCH_VER=$(grep "LINUX_VERSION-${BASE_VER}" "$KERNEL_CONFIG_FILE" | cut -d'=' -f2 | tr -d ' ')
+
+          # 步骤 4: 拼接成完整版本号
+          FULL_KERNEL_VERSION="${BASE_VER}${PATCH_VER}"
+
+          echo "已选定内核版本 (From .config): ${BASE_VER}"
+          echo "内核补丁版本 (Patch): ${PATCH_VER}"
+          echo "完整内核版本 (Full): ${FULL_KERNEL_VERSION}"
+
+          # 设置为输出
+          echo "kernel_version=${FULL_KERNEL_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Modify nfs-kernel-server Makefile
+        run: |
+          cd openwrt
+          if [ -f "feeds/packages/net/nfs-kernel-server/Makefile" ]; then
+            if ! grep -q "-Wno-error=format-nonliteral" feeds/packages/net/nfs-kernel-server/Makefile; then
+              sed -i '/TARGET_CFLAGS +=.*\\$/a\\t\t -Wno-error=format-nonliteral \\' feeds/packages/net/nfs-kernel-server/Makefile
+            else
+              echo "Flag -Wno-error=format-nonliteral already exists, skipping modification."
+            fi
+            # echo "Modify nfs-kernel-server Makefile:"
+            # cat feeds/packages/net/nfs-kernel-server/Makefile
+          else
+            echo "Error: Makefile not found at feeds/packages/net/nfs-kernel-server/Makefile"
+            exit 1
+          fi
+
+      - name: 编译前检查磁盘空间
+        run: |
+          MIN_SPACE=10
+          AVAILABLE=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
+          if [ -z "$AVAILABLE" ] || [ "$AVAILABLE" -lt "$MIN_SPACE" ]; then
+            echo "错误：磁盘空间不足，可用空间 ${AVAILABLE}G，需至少 ${MIN_SPACE}G"
+            exit 1
+          fi
+          echo "可用磁盘空间：${AVAILABLE}G"
+          df -hT
+
+      - name: 保存目录结构
+        run: |
+          pwd
+          tree /workdir -a | tee directory-structure.txt
+          tree /mnt/openwrt/dl -a | tee openwrt-dl-structure.txt
+          tree /mnt/openwrt/feeds -a | tee openwrt-feeds-structure.txt
+          tree /mnt/openwrt/build_dir -a | tee openwrt-build_dir-structure.txt
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: directory-structure
+          path: |
+            directory-structure.txt
+            openwrt-*-strstructure.txt
+
