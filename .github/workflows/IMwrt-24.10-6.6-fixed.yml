@@ -562,7 +562,7 @@ jobs:
       - name: 保存目录结构
         run: |
           pwd
-          tree / -a | tee directory-structure.txt
+          tree /workdir -a | tee directory-structure.txt
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
