@@ -109,18 +109,17 @@ jobs:
       - name: 设置 REPO_PATH
         run: echo "REPO_PATH=$(echo $REPO_URL | sed -E 's#https://github.com/##;s#/$##')" >> $GITHUB_ENV
 
-
       - name: 缓存编译依赖
         id: cache
         uses: actions/cache@v4
         with:
           path: |
-          /mnt/openwrt/dl
-          # /workdir/openwrt/dl
-          /mnt/openwrt/feeds
-          # /workdir/openwrt/feeds
-          # /mnt/openwrt/build_dir
-          # /workdir/openwrt/build_dir
+            /mnt/openwrt/dl
+            # /workdir/openwrt/dl
+            /mnt/openwrt/feeds
+            # /workdir/openwrt/feeds
+            # /mnt/openwrt/build_dir
+            # /workdir/openwrt/build_dir
           key: ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-${{ github.sha }}-${{ hashFiles('RAX3000M-eMMC_XR30-eMMC-hanwckf/feeds.conf.default') }}
           restore-keys: |
             ${{ runner.os }}-build-${{ env.REPO_URL }}-${{ env.REPO_BRANCH }}-
@@ -598,4 +597,3 @@ jobs:
           path: |
             directory-structure.txt
             openwrt-*-strstructure.txt
-
