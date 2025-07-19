@@ -491,6 +491,20 @@ jobs:
           name: OpenWrt_config
           path: openwrt/*.config
 
+      - name: 列出所有 feed 包
+        run: |
+          cd openwrt
+          echo "列出所有 feed 包:"
+          ./scripts/feeds list -s | tee all_feed_packages.txt
+          echo "Feed packages list saved to all_feed_packages.txt"
+
+      - name: 上传 feed 包日志
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-feed-packages
+          path: openwrt/all_feed_packages.txt
+          retention-days: 5
+
       - name: Get Version Info
         id: versions
         working-directory: ./openwrt
