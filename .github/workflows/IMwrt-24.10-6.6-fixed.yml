@@ -477,12 +477,12 @@ jobs:
         uses: P3TERX/ssh2actions@v1.0.0
         if: (github.event.inputs.ssh == 'true')
 
-      - name: 上传 feeds
-        uses: actions/upload-artifact@v4
-        with:
-          name: OpenWrt_feeds
-          path: |
-            openwrt/feeds
+      # - name: 上传 feeds
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: OpenWrt_feeds
+      #     path: |
+      #       openwrt/feeds
 
       - name: 上传 .config
         uses: actions/upload-artifact@v4
@@ -498,7 +498,6 @@ jobs:
           echo "列出所有 feed 包:"
           ./scripts/feeds list | tee all_feed_packages.txt
           echo "Feed packages list saved to all_feed_packages.txt"
-          exit 1
 
       - name: 上传 feed 包日志
         uses: actions/upload-artifact@v4
