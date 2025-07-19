@@ -11,3 +11,6 @@
 
 
 git clone https://github.com/destan19/OpenAppFilter package/OpenAppFilter
+
+git clone https://github.com/AdguardTeam/AdGuardHome package/AdGuardHome
+git clone https://github.com/xiaoxiao29/luci-app-adguardhome package/luci-app-adguardhome
