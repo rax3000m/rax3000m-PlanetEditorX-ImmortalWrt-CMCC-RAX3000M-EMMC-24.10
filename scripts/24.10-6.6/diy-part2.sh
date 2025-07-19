@@ -29,7 +29,7 @@
 #应用过滤(OAF)
 # echo "CONFIG_PACKAGE_luci-app-oaf=y" >>.config 
 
-echo "CONFIG_PACKAGE_AdGuardHome=y" >>.config 
+echo "CONFIG_PACKAGE_adguardhome=y" >>.config 
 # echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >>.config 
 
 # 删除 package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/e2p
