@@ -494,9 +494,11 @@ jobs:
       - name: 列出所有 feed 包
         run: |
           cd openwrt
+          ./scripts/feeds update -a 
           echo "列出所有 feed 包:"
-          ./scripts/feeds list -s | tee all_feed_packages.txt
+          ./scripts/feeds list | tee all_feed_packages.txt
           echo "Feed packages list saved to all_feed_packages.txt"
+          exit 1
 
       - name: 上传 feed 包日志
         uses: actions/upload-artifact@v4
