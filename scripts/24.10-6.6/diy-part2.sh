@@ -30,6 +30,7 @@
 # echo "CONFIG_PACKAGE_luci-app-oaf=y" >>.config 
 
 echo "CONFIG_PACKAGE_AdGuardHome=y" >>.config 
+echo "CONFIG_PACKAGE_adguardhome=y" >>.config 
 echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >>.config 
 
 ##删除同名软件包：
