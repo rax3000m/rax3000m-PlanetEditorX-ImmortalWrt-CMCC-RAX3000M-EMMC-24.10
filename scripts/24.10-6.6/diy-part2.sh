@@ -34,7 +34,7 @@ echo "CONFIG_PACKAGE_adguardhome=y" >>.config
 echo "CONFIG_PACKAGE_luci-app-adguardhome=y" >>.config 
 
 ##删除同名软件包：
-rm -rf feeds/packages/net/adguardhome
+# rm -rf feeds/packages/net/adguardhome
 
 # 删除 package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/e2p
 rm -f package/mtk/drivers/mt_wifi/files/mt7981-default-eeprom/e2p
