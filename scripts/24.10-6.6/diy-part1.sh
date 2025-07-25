@@ -12,5 +12,9 @@
 
 git clone https://github.com/destan19/OpenAppFilter package/OpenAppFilter
 
-git clone https://github.com/AdguardTeam/AdGuardHome package/AdGuardHome
-git clone https://github.com/xiaoxiao29/luci-app-adguardhome package/luci-app-adguardhome
+# git clone https://github.com/AdguardTeam/AdGuardHome.git package/adguardhome
+# git clone https://github.com/xiaoxiao29/luci-app-adguardhome.git package/luci-app-adguardhome
+
+
+# echo 'src-git adguardhome https://github.com/AdguardTeam/AdGuardHome.git;master' >>feeds.conf.default
+echo 'src-git luciadguardhome https://github.com/xiaoxiao29/luci-app-adguardhome.git;master' >>feeds.conf.default
