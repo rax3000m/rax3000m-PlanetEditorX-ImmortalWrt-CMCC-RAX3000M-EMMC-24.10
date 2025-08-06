@@ -398,10 +398,12 @@ jobs:
           ./scripts/feeds install -a || { echo "安装 Feeds 失败"; exit 1; }
 
           # cat feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm
+          echo "修正cifs的展示"
           mkdir -p feeds/luci/applications/luci-app-cifs/luasrc/view/cifs
           cp feeds/luci/applications/luci-app-cifs/luasrc/view/cifs_status.htm feeds/luci/applications/luci-app-cifs/luasrc/view/cifs/cifs_status.htm
 
           #添加编译日期标识
+          echo "添加编译日期标识"
           sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + '  编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
           # cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
 
@@ -423,7 +425,7 @@ jobs:
           cp "$DAEMON_JSON_PATH" "${DAEMON_JSON_PATH}.bak"
 
           # 使用 sed 修改 daemon.json，在 "log-level": "warn" 后插入 registry-mirrors
-          sed -i '/"log-level": "warn"/a\    ,"registry-mirrors": [\n        "https://docker.aityp.com/",\n        "https://docker.1ms.run",\n        "https://lispy.org/",\n        "https://docker.m.daocloud.io",\n        "https://docker.1panel.live",\n        "https://registry.cn-hangzhou.aliyuncs.com"\n    ]' "$DAEMON_JSON_PATH"
+          sed -i '/"log-level": "warn"/a\  ,\n"registry-mirrors": [\n    "https://docker.aityp.com/",\n    "https://docker.1ms.run",\n    "https://lispy.org/",\n    "https://docker.m.daocloud.io",\n    "https://docker.1panel.live",\n    "https://registry.cn-hangzhou.aliyuncs.com"\n  ]' "$DAEMON_JSON_PATH"
 
           # 展示修改后的 daemon.json 内容
           echo "展示修改后的 daemon.json 内容："
