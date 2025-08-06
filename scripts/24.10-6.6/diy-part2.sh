@@ -27,7 +27,7 @@ echo "CONFIG_PACKAGE_luci-app-openclash=y" >> .config
 echo "CONFIG_PACKAGE_luci-app-wechatpush=y" >> .config
 echo "CONFIG_PACKAGE_luci-i18n-wechatpush-zh-cn=y" >> .config
 #应用过滤(OAF)
-echo "CONFIG_PACKAGE_luci-app-oaf=y" >>.config 
+# echo "CONFIG_PACKAGE_luci-app-oaf=y" >>.config 
 
 # echo "CONFIG_PACKAGE_AdGuardHome=y" >>.config 
 echo "CONFIG_PACKAGE_adguardhome=y" >>.config 

@@ -10,7 +10,7 @@
 # 描述: OpenWrt DIY 脚本第一部分 (更新 feeds 之前)
 
 
-git clone https://github.com/destan19/OpenAppFilter package/OpenAppFilter
+# git clone https://github.com/destan19/OpenAppFilter package/OpenAppFilter
 
 # git clone https://github.com/AdguardTeam/AdGuardHome.git package/adguardhome
 # git clone https://github.com/xiaoxiao29/luci-app-adguardhome.git package/luci-app-adguardhome

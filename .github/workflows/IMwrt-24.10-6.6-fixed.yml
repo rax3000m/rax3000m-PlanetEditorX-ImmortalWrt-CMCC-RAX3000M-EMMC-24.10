@@ -16,7 +16,7 @@ on:
       LAN_IP:
         description: '设置 LAN IP 地址'
         required: true
-        default: '192.168.6.1'
+        default: '192.168.0.1'
       enable_5g_25db:
         description: '启用 5G 25dB 修改'
         type: boolean
@@ -175,8 +175,8 @@ jobs:
 
     # Job 级别的环境变量：这些变量会根据触发事件动态设置
     env:
-      # LAN_IP: 如果是 workflow_dispatch 触发，则使用输入的 LAN_IP，否则使用默认值 '192.168.6.1'
-      LAN_IP: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.LAN_IP || '192.168.6.1' }}
+      # LAN_IP: 如果是 workflow_dispatch 触发，则使用输入的 LAN_IP，否则使用默认值 '192.168.0.1'
+      LAN_IP: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.LAN_IP || '192.168.0.1' }}
 
     steps:
       - name: 调试信息
@@ -404,6 +404,30 @@ jobs:
           #添加编译日期标识
           sed -i "s/\(boardinfo\.model + cpubench\.cpubench\)/(\1) + '  编译时间: $(date +'%Y-%m-%d %H:%M:%S')'/g" $(find ./feeds/luci/modules/luci-mod-status/ -type f -name "10_system.js")
           # cat feeds/luci/modules/luci-mod-status/htdocs/luci-static/resources/view/status/include/10_system.js
+
+      - name: 修改daemon.json,在docker的daemon.json中增加镜像
+        run: |
+          #在docker的daemon.json中增加镜像
+
+          cd openwrt
+          # 在指定目录下查找 daemon.json 文件
+          DAEMON_JSON_PATH=$(find ./feeds/luci/applications/luci-app-docker/root/etc/docker/ -type f -name "daemon.json" | head -n 1)
+
+          # 检查是否找到 daemon.json
+          if [ -z "$DAEMON_JSON_PATH" ]; then
+            echo "错误：在feeds/luci/applications/luci-app-docker/root/etc/docker/没有找到daemon.json "
+            exit 1
+          fi
+
+          # 备份原始文件
+          cp "$DAEMON_JSON_PATH" "${DAEMON_JSON_PATH}.bak"
+
+          # 使用 sed 修改 daemon.json，在 "log-level": "warn" 后插入 registry-mirrors
+          sed -i '/"log-level": "warn"/a\    ,"registry-mirrors": [\n        "https://docker.aityp.com/",\n        "https://docker.1ms.run",\n        "https://lispy.org/",\n        "https://docker.m.daocloud.io",\n        "https://docker.1panel.live",\n        "https://registry.cn-hangzhou.aliyuncs.com"\n    ]' "$DAEMON_JSON_PATH"
+
+          # 展示修改后的 daemon.json 内容
+          echo "展示修改后的 daemon.json 内容："
+          cat "$DAEMON_JSON_PATH"
 
       - name: 安装iStore商店
         if: (github.event.inputs.istore == 'true')
@@ -714,7 +738,7 @@ jobs:
             echo "设备型号: ${{ matrix.device_model }}"
             echo "编译时间: $(date +'%Y-%m-%d %H:%M %Z')"
             echo "高功率模式: $([ "$ENABLE_5G_25DB" = 'true' ] && echo '已启用' || echo '未启用')"
-            echo "后台地址: 192.168.6.1 或 http://immortalwrt.lan/"
+            echo "后台地址: 192.168.0.1 或 http://immortalwrt.lan/"
             echo "源仓库 URL: $REPO_URL"
             echo "源仓库分支: $REPO_BRANCH"
             echo "配置文件: $CONFIG_FILE"
