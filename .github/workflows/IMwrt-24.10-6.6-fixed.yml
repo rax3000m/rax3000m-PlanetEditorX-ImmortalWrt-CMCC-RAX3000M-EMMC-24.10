@@ -428,7 +428,7 @@ jobs:
           sed -i 's/"log-level": "warn"/"log-level": "warn",/' "$DAEMON_JSON_PATH"
 
           # 第二步：在 "log-level": "warn", 后追加 registry-mirrors 字段
-          sed -i '/"log-level": "warn",/a\  "registry-mirrors": [\n    "https://docker.aityp.com/",\n    "https://docker.1ms.run",\n    "https://lispy.org/",\n    "https://docker.m.daocloud.io",\n    "https://docker.1panel.live",\n    "https://registry.cn-hangzhou.aliyuncs.com"\n  ]' "$DAEMON_JSON_PATH"
+          sed -i '/"log-level": "warn",/a\"registry-mirrors": [\n    "https://docker.aityp.com/",\n    "https://docker.1ms.run",\n    "https://lispy.org/",\n    "https://docker.m.daocloud.io",\n    "https://docker.1panel.live",\n    "https://registry.cn-hangzhou.aliyuncs.com"\n  ]' "$DAEMON_JSON_PATH"
 
           # 展示修改后的 daemon.json 内容
           echo "展示修改后的 daemon.json 内容："
