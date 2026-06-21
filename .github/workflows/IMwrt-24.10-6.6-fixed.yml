@@ -266,11 +266,20 @@ jobs:
           sudo mkdir -p /workdir
           sudo chown $USER:$GROUPS /workdir
 
+      # 直接写入 PATH 和环境变量
       - name: 配置 ccache
         run: |
-          echo "export PATH=/usr/lib/ccache:$PATH" >> $GITHUB_ENV
-          echo "export CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
+          echo "/usr/lib/ccache" >> $GITHUB_PATH
+          echo "CCACHE_DIR=$HOME/.ccache" >> $GITHUB_ENV
           ccache -M 5G
+      # 同时需要把 ccache 目录加入 actions/cache
+      - name: 恢复 ccache 缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ env.REPO_BRANCH }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ env.REPO_BRANCH }}-
 
       - name: 清理磁盘空间(Ubuntu)
         uses: jlumbroso/free-disk-space@main
@@ -645,9 +654,6 @@ jobs:
             directory-structure.txt
             openwrt-*-strstructure.txt
 
-      - name: test Exit workflow
-        run: exit 0
-
       - name: 编译固件
         id: compile
         timeout-minutes: 360
@@ -804,6 +810,10 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.RELEASE_TAG }}
           body_path: release
+          # 核心改动：强制设为最新
+          make_latest: true
+          # 设置为非预发布版本
+          prerelease: false
           files: |
             ${{ env.FIRMWARE }}/*sysupgrade*.*
 
